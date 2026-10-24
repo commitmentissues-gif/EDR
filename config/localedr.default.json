@@ -1,0 +1,32 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 3000,
+    "corsAllowedOrigins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+    "adminToken": "localedr-admin-sec-key-7749"
+  },
+  "agent": {
+    "serviceName": "LocalEDR_Agent",
+    "displayName": "LocalEDR Endpoint Defense Agent",
+    "heartbeatIntervalSeconds": 10,
+    "maxMemoryMb": 250,
+    "maxCpuPercent": 2.0
+  },
+  "database": {
+    "filePath": "data/localedr.db",
+    "walMode": true,
+    "autoSaveIntervalMs": 2000,
+    "maxEventRetentionDays": 30
+  },
+  "queue": {
+    "maxCapacity": 10000,
+    "batchFlushSize": 100,
+    "flushIntervalMs": 500
+  },
+  "logging": {
+    "level": "INFO",
+    "logToFile": true,
+    "logFilePath": "data/logs/localedr.log",
+    "format": "pretty"
+  }
+}

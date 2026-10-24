@@ -1,0 +1,999 @@
+# ==============================================================================
+# LocalEDR Configurable Detection Rules Catalog (YAML Specification)
+# ==============================================================================
+# Each rule contains:
+# - ID: Unique rule identifier
+# - Name: Human-readable detection rule name
+# - Description: Context and forensic rationale
+# - Enabled: Boolean active flag
+# - Severity: CRITICAL | HIGH | MEDIUM | LOW | INFO
+# - Conditions: Conditions evaluated against endpoint telemetry
+#     * process_name: Match target process name (string or list)
+#     * parent_process: Match parent process name (string or list)
+#     * command_line: Match command line patterns/arguments (string or list)
+#     * executable_path: Match binary execution directory/path (string or list)
+#     * hash: Target SHA-256/MD5 or 'threat_intel_match'
+#     * username: Target user/security principal (string or list)
+#     * process_relationships: Authenticode signing, parent sets, privilege escalation
+# - Score: Risk score (0-100)
+# - MITRE: Tactic, technique_id, technique_name, subtechnique_id
+# - Recommended action: Step-by-step SOC analyst remediation advice
+# ==============================================================================
+
+- id: "EDR-001-OFFICE-POWERSHELL"
+  name: "PowerShell Spawned by Microsoft Office Application"
+  description: "Detects Microsoft Word, Excel, PowerPoint, or Outlook spawning powershell.exe, indicative of malicious document macro execution or exploit payload staging."
+  enabled: true
+  severity: "CRITICAL"
+  score: 90
+  mitre:
+    tactic: "Execution"
+    technique_id: "T1059.001"
+    technique_name: "Command and Scripting Interpreter: PowerShell"
+    subtechnique_id: "T1059.001"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "powershell.exe"
+      - "pwsh.exe"
+    parent_process:
+      - "winword.exe"
+      - "excel.exe"
+      - "powerpnt.exe"
+      - "outlook.exe"
+  recommended_action: "Immediately isolate endpoint from network. Extract and quarantine the offending Office document. Inspect child command-line parameters for staged remote C2 URLs or memory injection payloads."
+
+- id: "EDR-002-CMD-UNUSUAL-PARENT"
+  name: "Command Shell (cmd.exe) Spawned by Unusual Parent Process"
+  description: "Detects cmd.exe being spawned by anomalous parent applications such as web browsers (Chrome, Edge, Firefox) or system daemon services (svchost, spoolsv, sqlservr), indicating web exploitation, service exploitation, or web shell execution."
+  enabled: true
+  severity: "HIGH"
+  score: 75
+  mitre:
+    tactic: "Execution"
+    technique_id: "T1059.003"
+    technique_name: "Windows Command Shell"
+    subtechnique_id: "T1059.003"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "cmd.exe"
+    parent_process:
+      - "chrome.exe"
+      - "msedge.exe"
+      - "firefox.exe"
+      - "svchost.exe"
+      - "spoolsv.exe"
+      - "sqlservr.exe"
+  recommended_action: "Review parent application execution logs. Inspect cmd.exe arguments for unauthorized shell execution or discovery commands. Verify whether the parent service or browser was subject to remote code execution."
+
+- id: "EDR-003-EXE-FROM-TEMP-DIR"
+  name: "Executable Launched from Temporary Directory"
+  description: "Detects an executable binary launching from a known temporary or world-writable directory (e.g. AppData\\Local\\Temp, Windows\\Temp, Users\\Public), common staging locations for dropper malware and browser-delivered payloads."
+  enabled: true
+  severity: "MEDIUM"
+  score: 65
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1027"
+    technique_name: "Obfuscated Files or Information"
+  conditions:
+    event_type: "process_creation"
+    executable_path:
+      - "\\appdata\\local\\temp\\"
+      - "\\windows\\temp\\"
+      - "\\users\\public\\"
+      - "\\temp\\"
+  recommended_action: "Quarantine the executable binary from the temporary directory. Retrieve file hash for threat intelligence reputation analysis. Verify user download history around the timestamp of execution."
+
+- id: "EDR-004-SUSPICIOUS-LOLBIN-EXEC"
+  name: "Suspicious Living-off-the-Land Binary (LOLBin) Execution"
+  description: "Detects known Windows utility binaries (certutil.exe, mshta.exe, bitsadmin.exe, regsvr32.exe, rundll32.exe) executing with suspicious command-line arguments typically used for remote payload download, scriptlet execution, or proxy execution."
+  enabled: true
+  severity: "HIGH"
+  score: 85
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1218"
+    technique_name: "System Binary Proxy Execution"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "certutil.exe"
+      - "mshta.exe"
+      - "bitsadmin.exe"
+      - "regsvr32.exe"
+      - "rundll32.exe"
+    command_line:
+      - "-urlcache"
+      - "-split"
+      - "http://"
+      - "https://"
+      - "/transfer"
+      - "/download"
+      - "javascript:"
+      - "vbscript:"
+      - "/s /u"
+  recommended_action: "Block outbound communication to the target URL. Inspect local disk for files dropped or modified by the LOLBin. Terminate the process tree and review parent process context."
+
+- id: "EDR-005-UNSIGNED-EXE-SUSPICIOUS-PARENT"
+  name: "Unsigned Executable Spawned by Scripting Interpreter or Service"
+  description: "Detects an unsigned or digitally unverified executable binary being spawned directly by script interpreters (powershell.exe, cmd.exe, wscript.exe, cscript.exe) or Windows system service hosts (svchost.exe), indicating staged execution of unapproved software or malware."
+  enabled: true
+  severity: "HIGH"
+  score: 70
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1036"
+    technique_name: "Masquerading"
+  conditions:
+    event_type: "process_creation"
+    process_relationships:
+      is_unsigned: true
+      parent_in:
+        - "powershell.exe"
+        - "cmd.exe"
+        - "wscript.exe"
+        - "cscript.exe"
+        - "svchost.exe"
+        - "wmiprvse.exe"
+  recommended_action: "Collect executable binary sample and verify Authenticode signing chain. Review parent script arguments to determine source of the unsigned binary. Quarantine binary pending internal verification."
+
+- id: "EDR-006-KNOWN-MALICIOUS-HASH"
+  name: "Threat Intelligence Match: Known Malicious Binary Hash"
+  description: "Detects execution or file presence of a binary whose cryptographic hash (SHA-256 or MD5) matches verified Threat Intelligence Indicators of Compromise (IoCs)."
+  enabled: true
+  severity: "CRITICAL"
+  score: 100
+  mitre:
+    tactic: "Execution"
+    technique_id: "T1204.002"
+    technique_name: "User Execution: Malicious File"
+  conditions:
+    hash: "threat_intel_match"
+  recommended_action: "Immediate incident containment: Isolate endpoint from network. Terminate associated process trees. Initiate forensic triage to assess lateral movement and credential exposure."
+
+- id: "EDR-007-POWERSHELL-ENCODED"
+  name: "PowerShell Obfuscated or Base64 Encoded Script Execution"
+  description: "Detects powershell.exe executing with -EncodedCommand or -enc flag to disguise command arguments, a standard technique for evading command-line inspection."
+  enabled: true
+  severity: "HIGH"
+  score: 80
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1059.001"
+    technique_name: "Command and Scripting Interpreter: PowerShell"
+    subtechnique_id: "T1059.001"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "powershell.exe"
+      - "pwsh.exe"
+    command_line:
+      - "-enc"
+      - "-encodedcommand"
+      - "-e "
+  recommended_action: "Base64-decode the command-line string. Check for network download cradles, reflective DLL injection, or Active Directory enumeration."
+
+- id: "EDR-008-SUSPICIOUS-USERNAME-SHELL"
+  name: "Suspicious User Account Spawning Interactive Command Shell"
+  description: "Detects unexpected or restricted user accounts (such as Guest or DefaultAccount) spawning administrative or interactive command interpreters."
+  enabled: true
+  severity: "HIGH"
+  score: 75
+  mitre:
+    tactic: "Privilege Escalation"
+    technique_id: "T1078"
+    technique_name: "Valid Accounts"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "cmd.exe"
+      - "powershell.exe"
+    username:
+      - "Guest"
+      - "DefaultAccount"
+      - "WDAGUtilityAccount"
+  recommended_action: "Verify account authorization. Disable compromised guest account immediately. Review authentication audit logs for unauthorized interactive sessions."
+
+- id: "EDR-009-DISCOVERY-RECON"
+  name: "Suspicious Reconnaissance Discovery Command Sequence"
+  description: "Detects user discovery or privilege reconnaissance commands (whoami /priv, net user, vssadmin delete shadows, nltest)."
+  enabled: true
+  severity: "MEDIUM"
+  score: 50
+  mitre:
+    tactic: "Discovery"
+    technique_id: "T1087.001"
+    technique_name: "Account Discovery: Local Account"
+    subtechnique_id: "T1087.001"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "whoami.exe"
+      - "net.exe"
+      - "net1.exe"
+      - "vssadmin.exe"
+      - "nltest.exe"
+    command_line:
+      - "/priv"
+      - "user"
+      - "group"
+      - "delete shadows"
+      - "domain_trusts"
+  recommended_action: "Verify whether administrative task was scheduled. Check for preceding shell or macro execution on the parent process."
+
+- id: "EDR-010-SCHEDULED-TASK-PERSISTENCE"
+  name: "Scheduled Task Created for Persistence or Execution"
+  description: "Detects use of schtasks.exe to create or modify Windows scheduled tasks, commonly abused for persistence and privilege escalation."
+  enabled: true
+  severity: "HIGH"
+  score: 75
+  mitre:
+    tactic: "Persistence"
+    technique_id: "T1053.005"
+    technique_name: "Scheduled Task/Job: Scheduled Task"
+    subtechnique_id: "T1053.005"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "schtasks.exe"
+    command_line:
+      - "/create"
+      - "/change"
+      - "/run"
+  recommended_action: "Inspect the scheduled task XML definition, target binary path, triggers, and scheduled execution account."
+
+- id: "EDR-011-REGISTRY-RUN-KEY-PERSISTENCE"
+  name: "Windows Registry Run Key Persistence Staging"
+  description: "Detects modification of Windows Registry Run or RunOnce keys commonly targeted by malware droppers to achieve autostart persistence across reboots."
+  enabled: true
+  severity: "HIGH"
+  score: 80
+  mitre:
+    tactic: "Persistence"
+    technique_id: "T1547.001"
+    technique_name: "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder"
+    subtechnique_id: "T1547.001"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "reg.exe"
+      - "powershell.exe"
+      - "cmd.exe"
+    command_line:
+      - "\\currentversion\\run"
+      - "\\currentversion\\runonce"
+      - "currentversion\\run"
+  recommended_action: "Audit the executable target specified in the registry value. Remove unauthorized autorun entries and quarantine referenced binary."
+
+- id: "EDR-012-INGRESS-TOOL-TRANSFER"
+  name: "Ingress Tool Transfer via Native Windows Utility"
+  description: "Detects native Windows tools (certutil, bitsadmin, curl, wget, PowerShell) executing download commands to transfer remote tooling or payloads into the endpoint."
+  enabled: true
+  severity: "HIGH"
+  score: 70
+  mitre:
+    tactic: "Command and Control"
+    technique_id: "T1105"
+    technique_name: "Ingress Tool Transfer"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "bitsadmin.exe"
+      - "curl.exe"
+      - "wget.exe"
+    command_line:
+      - "/transfer"
+      - "curl -o"
+      - "curl -O"
+      - "wget -O"
+      - "http://"
+      - "https://"
+  recommended_action: "Identify destination path of downloaded file. Quarantine downloaded artifact and block remote C2 IP at perimeter firewall."
+
+- id: "EDR-013-APPLICATION-LAYER-C2"
+  name: "Application Layer Protocol C2 Communication"
+  description: "Detects non-browser system utility communicating over standard web application layer ports (8080, 8443, 4444) indicative of C2 channel establishment."
+  enabled: true
+  severity: "HIGH"
+  score: 70
+  mitre:
+    tactic: "Command and Control"
+    technique_id: "T1071"
+    technique_name: "Application Layer Protocol"
+    subtechnique_id: "T1071.001"
+  conditions:
+    event_type: "process_creation"
+    command_line:
+      - ":8080"
+      - ":8443"
+      - ":4444"
+      - "/c2_beacon"
+      - "/c2/"
+  recommended_action: "Inspect active network socket connections for the process. Correlate with proxy and DNS query telemetry."
+
+- id: "EDR-014-DISABLE-WINDOWS-DEFENDER"
+  name: "Impair Defenses: Windows Defender Real-Time Protection Disabled"
+  description: "Detects commands attempting to disable Windows Defender Antivirus, tamper protection, or stop the WinDefend security service, a standard precursor to ransomware encryption."
+  enabled: true
+  severity: "CRITICAL"
+  score: 95
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1562"
+    technique_name: "Impair Defenses"
+    subtechnique_id: "T1562.001"
+  conditions:
+    event_type: "process_creation"
+    command_line:
+      - "disablerealtimemonitoring"
+      - "disablebehaviormonitoring"
+      - "disableioavprotection"
+      - "sc stop windefend"
+      - "sc config windefend start= disabled"
+      - "net stop windefend"
+  recommended_action: "URGENT DEFENSE TAMPERING DETECTED: Immediately re-enable Windows Defender real-time monitoring and investigate parent process for ransomware activity."
+
+- id: "EDR-015-SYSTEM-INFO-DISCOVERY"
+  name: "System Information Discovery for Reconnaissance"
+  description: "Detects execution of systeminfo.exe or system discovery commands typically used by attackers following initial compromise to profile endpoint hardware and OS configuration."
+  enabled: true
+  severity: "MEDIUM"
+  score: 45
+  mitre:
+    tactic: "Discovery"
+    technique_id: "T1082"
+    technique_name: "System Information Discovery"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "systeminfo.exe"
+  recommended_action: "Determine context of discovery command. Check whether spawned by interactive administrator session or anomalous parent script."
+
+- id: "EDR-016-SCRIPT-INTERPRETER-PROXY"
+  name: "Scripting Interpreter Proxy Execution via WScript/CScript"
+  description: "Detects wscript.exe or cscript.exe executing scriptlets or proxy execution patterns to evade process inspection."
+  enabled: true
+  severity: "MEDIUM"
+  score: 55
+  mitre:
+    tactic: "Execution"
+    technique_id: "T1059"
+    technique_name: "Command and Scripting Interpreter"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "wscript.exe"
+      - "cscript.exe"
+    command_line:
+      - "//e:vbscript"
+      - "//e:jscript"
+      - ".vbs"
+      - ".js"
+      - ".wsf"
+  recommended_action: "Inspect script file content. Verify Authenticode signature or enterprise authorization for the script execution."
+
+- id: "EDR-017-WIN-USER-ACCOUNT-CREATED"
+  name: "Windows Security: Unauthorized User Account Provisioned (Event 4720)"
+  description: "Detects Windows Security Event ID 4720 indicating a new user account was provisioned, commonly abused by adversaries to establish backdoor persistence."
+  enabled: true
+  severity: "HIGH"
+  score: 75
+  mitre:
+    tactic: "Persistence"
+    technique_id: "T1136"
+    technique_name: "Create Account"
+    subtechnique_id: "T1136.001"
+  conditions:
+    windows_event_id:
+      - 4720
+    channel:
+      - "Security"
+  recommended_action: "Review user creation audit details in Security Event Log. Verify authorization with IT management and disable unauthorized local user accounts immediately."
+
+- id: "EDR-018-WIN-FAILED-LOGON-SPRAY"
+  name: "Windows Security: Failed Remote Logon Attempt (Event 4625)"
+  description: "Detects failed Windows logon attempt (Event ID 4625), indicative of brute-force password guessing, credential stuffing, or lateral movement probing."
+  enabled: true
+  severity: "MEDIUM"
+  score: 50
+  mitre:
+    tactic: "Credential Access"
+    technique_id: "T1110"
+    technique_name: "Brute Force"
+    subtechnique_id: "T1110.001"
+  conditions:
+    windows_event_id:
+      - 4625
+    channel:
+      - "Security"
+  recommended_action: "Examine source IP and logon type. Check for preceding authentication anomalies or repeated password failures across multiple accounts."
+
+- id: "EDR-019-WIN-SPECIAL-PRIVILEGES-ASSIGNED"
+  name: "Windows Security: Sensitive Administrative Privileges Assigned (Event 4672)"
+  description: "Detects assignment of high-risk administrative privileges (SeDebugPrivilege, SeTcbPrivilege, SeTakeOwnershipPrivilege) during session logon."
+  enabled: true
+  severity: "HIGH"
+  score: 70
+  mitre:
+    tactic: "Privilege Escalation"
+    technique_id: "T1078"
+    technique_name: "Valid Accounts"
+    subtechnique_id: "T1078.003"
+  conditions:
+    windows_event_id:
+      - 4672
+    channel:
+      - "Security"
+  recommended_action: "Audit caller account and verify whether elevated privileges are legitimate for the designated administrative session."
+
+- id: "EDR-020-WIN-SERVICE-INSTALLED-SCM"
+  name: "Windows System: New Service Installed via Service Control Manager (Event 7045)"
+  description: "Detects new service installation logged in System event stream (Event ID 7045 / 4697), a primary persistence and privilege escalation technique."
+  enabled: true
+  severity: "HIGH"
+  score: 80
+  mitre:
+    tactic: "Persistence"
+    technique_id: "T1543"
+    technique_name: "Create or Modify System Process"
+    subtechnique_id: "T1543.003"
+  conditions:
+    windows_event_id:
+      - 7045
+      - 4697
+    channel:
+      - "System"
+      - "Security"
+      - "Service Control Manager"
+  recommended_action: "Verify service binary path and service account. If unverified, stop the service and delete service registry keys."
+
+- id: "EDR-021-WIN-SCHEDULED-TASK-REGISTERED"
+  name: "Windows Task Scheduler: Scheduled Task Registered (Event 106)"
+  description: "Detects scheduled task registration via Microsoft-Windows-TaskScheduler (Event ID 106 / 4698), commonly used to schedule periodic payload execution."
+  enabled: true
+  severity: "HIGH"
+  score: 75
+  mitre:
+    tactic: "Persistence"
+    technique_id: "T1053.005"
+    technique_name: "Scheduled Task/Job: Scheduled Task"
+    subtechnique_id: "T1053.005"
+  conditions:
+    windows_event_id:
+      - 106
+      - 4698
+    channel:
+      - "Task Scheduler"
+      - "Security"
+  recommended_action: "Inspect Task Scheduler XML definition in C:\\Windows\\System32\\Tasks. Delete task and investigate registering principal."
+
+- id: "EDR-022-WIN-POWERSHELL-SCRIPTBLOCK"
+  name: "Windows PowerShell: Suspicious ScriptBlock Execution (Event 4104)"
+  description: "Detects execution of high-risk PowerShell script blocks (Event ID 4104) containing download cradles, reflection, memory injection, or AMSI bypasses."
+  enabled: true
+  severity: "HIGH"
+  score: 85
+  mitre:
+    tactic: "Execution"
+    technique_id: "T1059.001"
+    technique_name: "Command and Scripting Interpreter: PowerShell"
+    subtechnique_id: "T1059.001"
+  conditions:
+    windows_event_id:
+      - 4104
+    channel:
+      - "PowerShell"
+    script_text:
+      - "downloadstring"
+      - "invoke-expression"
+      - "bypass"
+      - "webclient"
+      - "-enc"
+      - "bitstransfer"
+      - "iex"
+  recommended_action: "Review complete de-obfuscated script block text. Identify network destination and isolate host if beaconing is detected."
+
+- id: "EDR-023-WIN-DEFENDER-PROTECTION-DISABLED"
+  name: "Windows Defender: Real-time Protection Disabled (Event 5001)"
+  description: "Detects Windows Defender Antivirus Event 5001 indicating real-time protection was disabled, leaving endpoint vulnerable to malware execution."
+  enabled: true
+  severity: "CRITICAL"
+  score: 95
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1562"
+    technique_name: "Impair Defenses"
+    subtechnique_id: "T1562.001"
+  conditions:
+    windows_event_id:
+      - 5001
+    channel:
+      - "Windows Defender"
+  recommended_action: "CRITICAL TAMPERING: Immediately re-enable Defender Real-Time Protection and execute complete offline scan."
+
+- id: "EDR-024-FILE-STARTUP-DROP"
+  name: "File System: Executable Dropped into Windows Startup Folder"
+  description: "Detects file modification or creation events in Windows Startup directories or user autostart paths."
+  enabled: true
+  severity: "HIGH"
+  score: 80
+  mitre:
+    tactic: "Persistence"
+    technique_id: "T1547.001"
+    technique_name: "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder"
+    subtechnique_id: "T1547.001"
+  conditions:
+    event_category:
+      - "file"
+    file_path:
+      - "\\start menu\\programs\\startup"
+      - "\\appdata\\roaming\\microsoft\\windows\\start menu"
+  recommended_action: "Quarantine dropped file immediately and examine creating process."
+
+- id: "EDR-025-REGISTRY-PERSISTENCE-KEY"
+  name: "Registry: Autostart Run or RunOnce Key Modified"
+  description: "Detects direct registry key modification events on Run or RunOnce persistence locations."
+  enabled: true
+  severity: "HIGH"
+  score: 80
+  mitre:
+    tactic: "Persistence"
+    technique_id: "T1547.001"
+    technique_name: "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder"
+    subtechnique_id: "T1547.001"
+  conditions:
+    event_category:
+      - "registry"
+    registry_key:
+      - "\\currentversion\\run"
+      - "\\currentversion\\runonce"
+  recommended_action: "Inspect value data of registry entry, remove unauthorized autorun keys, and inspect originating PID."
+
+- id: "EDR-026-POWERSHELL-HIDDEN-EXEC"
+  name: "PowerShell: Hidden Window or Stealth Execution"
+  description: "Detects powershell.exe or pwsh.exe executed with hidden window style arguments (-WindowStyle Hidden, -w hidden, -win 1) to conceal execution from the desktop user."
+  enabled: true
+  severity: "HIGH"
+  score: 75
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1564.003"
+    technique_name: "Hide Artifacts: Hidden Window"
+    subtechnique_id: "T1564.003"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "powershell.exe"
+      - "pwsh.exe"
+    command_line:
+      - "-windowstyle hidden"
+      - "-w hidden"
+      - "-win hidden"
+      - "-w 1"
+      - "-win 1"
+  recommended_action: "Inspect PowerShell command parameters and script text. Terminate hidden process and audit parent process context."
+
+- id: "EDR-027-BROWSER-POWERSHELL"
+  name: "Web Browser Spawning PowerShell or Command Shell"
+  description: "Detects web browsers (Chrome, Edge, Firefox, Brave, Opera) spawning powershell.exe or cmd.exe, indicative of browser exploit, malicious extension, or drive-by compromise."
+  enabled: true
+  severity: "HIGH"
+  score: 85
+  mitre:
+    tactic: "Initial Access"
+    technique_id: "T1189"
+    technique_name: "Drive-by Compromise"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "powershell.exe"
+      - "pwsh.exe"
+      - "cmd.exe"
+    parent_process:
+      - "chrome.exe"
+      - "msedge.exe"
+      - "firefox.exe"
+      - "brave.exe"
+      - "opera.exe"
+      - "iexplore.exe"
+  recommended_action: "Immediately isolate endpoint. Collect browser history, active tabs, and download logs around incident timestamp. Terminate child shell process tree."
+
+- id: "EDR-028-POWERSHELL-TO-LOLBIN"
+  name: "PowerShell Spawning Living-off-the-Land Binary (LOLBin)"
+  description: "Detects PowerShell execution spawning secondary LOLBins (certutil, bitsadmin, mshta, regsvr32, rundll32, wmic, msiexec) in an execution chain to bypass controls."
+  enabled: true
+  severity: "HIGH"
+  score: 80
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1218"
+    technique_name: "System Binary Proxy Execution"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "certutil.exe"
+      - "bitsadmin.exe"
+      - "mshta.exe"
+      - "regsvr32.exe"
+      - "rundll32.exe"
+      - "wmic.exe"
+      - "msiexec.exe"
+      - "cscript.exe"
+      - "wscript.exe"
+      - "reg.exe"
+    parent_process:
+      - "powershell.exe"
+      - "pwsh.exe"
+  recommended_action: "Inspect command-line arguments of both PowerShell and the child LOLBin. Check for remote download or proxy execution parameters."
+
+- id: "EDR-029-LOLBIN-TO-EXECUTABLE"
+  name: "Living-off-the-Land Binary Spawning Executable Payload"
+  description: "Detects native Windows system utilities (certutil, bitsadmin, mshta, regsvr32, rundll32, wmic, cscript, wscript) spawning an executable payload binary rather than performing system functions."
+  enabled: true
+  severity: "HIGH"
+  score: 80
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1218"
+    technique_name: "System Binary Proxy Execution"
+  conditions:
+    event_type: "process_creation"
+    parent_process:
+      - "certutil.exe"
+      - "bitsadmin.exe"
+      - "mshta.exe"
+      - "regsvr32.exe"
+      - "rundll32.exe"
+      - "wmic.exe"
+      - "cscript.exe"
+      - "wscript.exe"
+      - "schtasks.exe"
+    process_relationships:
+      parent_is_lolbin: true
+      target_is_executable: true
+  recommended_action: "Quarantine spawned executable binary immediately. Trace originating LOLBin command line and inspect network connections."
+
+- id: "EDR-030-POWERSHELL-DOWNLOAD-CRADLE"
+  name: "PowerShell Remote Download Cradle Execution"
+  description: "Detects PowerShell executing web download cradle commands (DownloadString, DownloadFile, Invoke-WebRequest, Start-BitsTransfer) to retrieve remote payloads directly into memory or disk."
+  enabled: true
+  severity: "HIGH"
+  score: 85
+  mitre:
+    tactic: "Command and Control"
+    technique_id: "T1105"
+    technique_name: "Ingress Tool Transfer"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "powershell.exe"
+      - "pwsh.exe"
+    command_line:
+      - "downloadstring"
+      - "downloadfile"
+      - "invoke-webrequest"
+      - "iwr "
+      - "start-bitstransfer"
+      - "net.webclient"
+    allowlist_command_line:
+      - "get-date"
+      - "get-process"
+      - "get-service"
+  recommended_action: "Extract remote URL from PowerShell command. Block outbound C2 communication and search memory for in-memory injected modules."
+
+- id: "EDR-031-LOLBIN-TEMP-LOCATION"
+  name: "LOLBin Execution Staged from Temporary Directory"
+  description: "Detects monitored Living-off-the-Land Binaries executing from or targeting executables hosted within world-writable temporary directories (AppData\\Local\\Temp, Windows\\Temp, Users\\Public)."
+  enabled: true
+  severity: "MEDIUM"
+  score: 65
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1027"
+    technique_name: "Obfuscated Files or Information"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "powershell.exe"
+      - "cmd.exe"
+      - "rundll32.exe"
+      - "regsvr32.exe"
+      - "mshta.exe"
+      - "certutil.exe"
+      - "bitsadmin.exe"
+      - "wmic.exe"
+      - "cscript.exe"
+      - "wscript.exe"
+      - "msiexec.exe"
+    process_relationships:
+      is_temp_location: true
+  recommended_action: "Isolate file located in temporary directory. Calculate cryptographic hash and check threat intelligence reputation."
+
+- id: "EDR-032-WMIC-PROCESS-CREATION"
+  name: "WMIC: Process Call Create Execution"
+  description: "Detects wmic.exe being abused to spawn stealthy child processes via 'process call create', a classic evasion technique to break parent-child lineage analysis."
+  enabled: true
+  severity: "HIGH"
+  score: 75
+  mitre:
+    tactic: "Execution"
+    technique_id: "T1047"
+    technique_name: "Windows Management Instrumentation"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "wmic.exe"
+    command_line:
+      - "process call create"
+  recommended_action: "Identify command being spawned by WMIC. Audit WMI activity logs and inspect parent process execution context."
+
+- id: "EDR-033-MSIEXEC-REMOTE-INSTALL"
+  name: "Msiexec Silent Remote Package Download and Install"
+  description: "Detects msiexec.exe downloading and executing MSI packages from remote HTTP or HTTPS URLs in quiet mode (/q /i http://...)."
+  enabled: true
+  severity: "HIGH"
+  score: 80
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1218.007"
+    technique_name: "System Binary Proxy Execution: Msiexec"
+    subtechnique_id: "T1218.007"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "msiexec.exe"
+    command_line:
+      - "http://"
+      - "https://"
+  recommended_action: "Block outbound connection to remote package URL. Inspect Windows Installer cache for dropped binaries and unverified services."
+
+- id: "EDR-034-REGSVR32-SQUIBLYDOO"
+  name: "Regsvr32 Squiblydoo Remote Scriptlet Proxy Execution"
+  description: "Detects regsvr32.exe executing remote scriptlet files (.sct) via /s /u /i parameters, bypassing AppLocker and traditional binary execution policies."
+  enabled: true
+  severity: "HIGH"
+  score: 85
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1218.010"
+    technique_name: "System Binary Proxy Execution: Regsvr32"
+    subtechnique_id: "T1218.010"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "regsvr32.exe"
+    command_line:
+      - "/s /u /i"
+      - "/i:http"
+      - "scrobj.dll"
+      - ".sct"
+  recommended_action: "Quarantine referenced scriptlet. Inspect scrobj.dll execution context and terminate the regsvr32 process tree."
+
+- id: "EDR-035-RUNDLL32-PROXY-EXEC"
+  name: "Rundll32 Inline Script or Suspicious Protocol Execution"
+  description: "Detects rundll32.exe executing inline javascript:, vbscript:, or proxying execution of unverified scripts via url.dll or scrobj.dll."
+  enabled: true
+  severity: "HIGH"
+  score: 80
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1218.011"
+    technique_name: "System Binary Proxy Execution: Rundll32"
+    subtechnique_id: "T1218.011"
+  conditions:
+    event_type: "process_creation"
+    process_name:
+      - "rundll32.exe"
+    command_line:
+      - "javascript:"
+      - "vbscript:"
+      - "url.dll"
+      - "scrobj.dll"
+  recommended_action: "Inspect script string passed to rundll32. Terminate the process and audit network connections."
+
+- id: "EDR-036-NETWORK-MALICIOUS-IP"
+  name: "Network Connection to Known Malicious C2 IP"
+  description: "Detects outbound network communication to known adversary command and control IP addresses verified by threat intelligence."
+  enabled: true
+  severity: "CRITICAL"
+  score: 95
+  mitre:
+    tactic: "Command and Control"
+    technique_id: "T1071"
+    technique_name: "Application Layer Protocol"
+    subtechnique_id: "T1071.001"
+  conditions:
+    event_type: "network_connection"
+    destination_ip:
+      - "198.51.100.45"
+      - "203.0.113.195"
+      - "185.220.101.5"
+      - "194.26.29.114"
+      - "91.240.118.172"
+      - "45.142.214.123"
+  recommended_action: "Immediately isolate endpoint from network, block destination IP at firewall, and terminate originating process tree."
+
+- id: "EDR-037-NETWORK-UNCOMMON-PORT"
+  name: "Outbound Network Connection to Uncommon / Suspicious Port"
+  description: "Detects outbound connections destined for non-standard ports commonly leveraged by Metasploit, reverse shells, IRC botnets, or Tor relays."
+  enabled: true
+  severity: "HIGH"
+  score: 75
+  mitre:
+    tactic: "Command and Control"
+    technique_id: "T1571"
+    technique_name: "Non-Standard Port"
+  conditions:
+    event_type: "network_connection"
+    destination_port:
+      - 4444
+      - 1337
+      - 6667
+      - 31337
+      - 9001
+      - 9050
+      - 4443
+      - 5555
+      - 7777
+  recommended_action: "Inspect payload and socket metadata. Check if connection is a reverse TCP shell listener or unauthorized proxy."
+
+- id: "EDR-038-NETWORK-SUSPICIOUS-PROCESS"
+  name: "Suspicious Process Initiating Outbound Network Connection"
+  description: "Detects Microsoft Office applications, system utilities, or command shells initiating direct outbound TCP/UDP sockets to external hosts."
+  enabled: true
+  severity: "HIGH"
+  score: 85
+  mitre:
+    tactic: "Execution"
+    technique_id: "T1204.002"
+    technique_name: "User Execution: Malicious File"
+  conditions:
+    event_type: "network_connection"
+    process_name:
+      - "winword.exe"
+      - "excel.exe"
+      - "powerpnt.exe"
+      - "outlook.exe"
+      - "notepad.exe"
+      - "calc.exe"
+      - "spoolsv.exe"
+      - "lsass.exe"
+  recommended_action: "Inspect process tree, active macros, and staged files. Terminate unauthorized outbound socket connection."
+
+- id: "EDR-039-NETWORK-SUSPICIOUS-DESTINATION"
+  name: "Outbound Network Connection to Suspicious Dynamic DNS or High-Risk Domain"
+  description: "Detects network connections to dynamic DNS providers (duckdns, ngrok) or risky TLDs (.xyz, .top, .ru) frequently abused for fast-flux C2."
+  enabled: true
+  severity: "HIGH"
+  score: 80
+  mitre:
+    tactic: "Command and Control"
+    technique_id: "T1071.001"
+    technique_name: "Application Layer Protocol: Web Protocols"
+  conditions:
+    event_type: "network_connection"
+    domain:
+      - "duckdns.org"
+      - "ngrok.io"
+      - "ngrok-free.app"
+      - "localtunnel.me"
+      - ".xyz"
+      - ".top"
+      - ".ru"
+      - ".su"
+      - ".onion"
+  recommended_action: "Inspect DNS query logs, examine resolved IPs, and restrict outbound communication to unapproved dynamic DNS services."
+
+- id: "EDR-040-NETWORK-BEACONING-PATTERN"
+  name: "Repeated Connection Pattern: Periodic Low-Jitter C2 Beaconing"
+  description: "Detects repeated connections to the same external IP and port at fixed intervals characteristic of automated C2 agent check-ins."
+  enabled: true
+  severity: "HIGH"
+  score: 85
+  mitre:
+    tactic: "Command and Control"
+    technique_id: "T1071"
+    technique_name: "Application Layer Protocol"
+  conditions:
+    event_type: "network_connection"
+    connection_state: "ESTABLISHED"
+  recommended_action: "Isolate host and perform memory analysis on originating process to detect injected beaconing payloads."
+
+- id: "EDR-041-FILE-STARTUP-PERSISTENCE"
+  name: "File Dropped into Start Menu Startup Folder"
+  description: "Detects executable binaries, scripts, or shortcuts written to user or system Startup folders for autostart logon persistence."
+  enabled: true
+  severity: "CRITICAL"
+  score: 90
+  mitre:
+    tactic: "Persistence"
+    technique_id: "T1547.001"
+    technique_name: "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder"
+  conditions:
+    event_category:
+      - "file"
+    file_path:
+      - "\\start menu\\programs\\startup"
+      - "/startup"
+  recommended_action: "Immediately quarantine dropped file from Startup folder and inspect originating user session."
+
+- id: "EDR-042-FILE-TEMP-EXECUTABLE-DROP"
+  name: "Executable or DLL Staged in Temporary Directory"
+  description: "Detects executable binaries or DLLs dropped into temporary staging locations, typical of second-stage malware droppers."
+  enabled: true
+  severity: "HIGH"
+  score: 75
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1027"
+    technique_name: "Obfuscated Files or Information"
+  conditions:
+    event_category:
+      - "file"
+    file_path:
+      - "\\appdata\\local\\temp"
+      - "\\windows\\temp"
+      - "/tmp"
+  recommended_action: "Calculate cryptographic hash, inspect parent process, and quarantine staged payload."
+
+- id: "EDR-043-FILE-DOUBLE-EXTENSION-MASQUERADE"
+  name: "Deceptive Double File Extension Masquerade"
+  description: "Detects files created with deceptive double extensions (e.g. .pdf.exe, .docx.vbs) designed to mislead users into executing malware."
+  enabled: true
+  severity: "HIGH"
+  score: 85
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1036.007"
+    technique_name: "Masquerading: Double File Extension"
+  conditions:
+    event_category:
+      - "file"
+    file_path:
+      - ".pdf.exe"
+      - ".docx.exe"
+      - ".xlsx.exe"
+      - ".pdf.vbs"
+      - ".txt.exe"
+  recommended_action: "Immediately delete or quarantine disguised payload and trace ingress download vector."
+
+- id: "EDR-044-FILE-SYSTEM32-DLL-DROP"
+  name: "Unauthorized Binary or DLL Dropped in Windows System Directory"
+  description: "Detects creation or modification of binary files in System32 or SysWOW64 outside of trusted Windows Update installers."
+  enabled: true
+  severity: "CRITICAL"
+  score: 90
+  mitre:
+    tactic: "Defense Evasion"
+    technique_id: "T1574"
+    technique_name: "Hijack Execution Flow"
+  conditions:
+    event_category:
+      - "file"
+    file_path:
+      - "\\windows\\system32\\"
+      - "\\windows\\syswow64\\"
+  recommended_action: "Verify Authenticode digital signature and revert unauthorized System32 binary."
+
+- id: "EDR-045-FILE-PERSISTENCE-TASK-DROP"
+  name: "Scheduled Tasks Infrastructure File Drop"
+  description: "Detects direct file drops into System32\\Tasks or WMI repository paths to establish stealthy persistence."
+  enabled: true
+  severity: "HIGH"
+  score: 80
+  mitre:
+    tactic: "Persistence"
+    technique_id: "T1053.005"
+    technique_name: "Scheduled Task/Job: Scheduled Task"
+  conditions:
+    event_category:
+      - "file"
+    file_path:
+      - "\\system32\\tasks\\"
+      - "\\system32\\wbem\\"
+  recommended_action: "Audit scheduled tasks definitions, inspect task actions, and delete unapproved task XMLs."
+
+
+

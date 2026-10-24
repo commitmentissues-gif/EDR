@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-LocalEDR.Agent-7749</UserSecretsId>
+    <RootNamespace>LocalEDR.Agent</RootNamespace>
+    <AssemblyName>LocalEDR_Agent</AssemblyName>
+    <!-- Optimize for minimal footprint: Native AOT support for Windows x64 -->
+    <PublishAot Condition="'$(RuntimeIdentifier)' == 'win-x64'">true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <OptimizationPreference>Size</OptimizationPreference>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.0" />
+  </ItemGroup>
+</Project>

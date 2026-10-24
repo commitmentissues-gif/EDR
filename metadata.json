@@ -1,0 +1,6 @@
+{
+  "name": "LocalEDR - Windows Endpoint Detection & Response",
+  "description": "Lightweight, privacy-preserving local Windows EDR with real-time event telemetry, MITRE ATT&CK mapping, heuristic rule engine, and local web dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

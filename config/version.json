@@ -1,0 +1,23 @@
+{
+  "name": "LocalEDR",
+  "version": "1.0.0-alpha.1",
+  "buildDate": "2026-09-25",
+  "apiVersion": "v1",
+  "architecture": "x64",
+  "targetOS": "Windows 10/11 / Windows Server 2016+",
+  "commit": "a1f9e42b",
+  "components": {
+    "agent": "1.0.0",
+    "backend": "1.0.0",
+    "dashboard": "1.0.0",
+    "ruleEngine": "1.0.0"
+  },
+  "capabilities": [
+    "LOCAL_SQLITE_PERSISTENCE",
+    "STRUCTURED_LOGGING",
+    "LOCAL_HEALTH_CHECKS",
+    "CONFIG_HOT_RELOAD",
+    "MITRE_ATTACK_MAPPING",
+    "STAGED_RESPONSE_ACTIONS"
+  ]
+}

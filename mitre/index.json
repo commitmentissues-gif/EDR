@@ -1,0 +1,25 @@
+{
+  "activeVersion": "v15.1",
+  "versions": [
+    {
+      "version": "v15.1",
+      "name": "MITRE ATT&CK Enterprise v15.1",
+      "filePath": "mitre/v15.1/enterprise-attack.json",
+      "releaseDate": "2024-10-31",
+      "matrix": "Enterprise ATT&CK",
+      "techniquesCount": 21,
+      "tacticsCount": 14,
+      "status": "ACTIVE"
+    },
+    {
+      "version": "v14.1",
+      "name": "MITRE ATT&CK Enterprise v14.1",
+      "filePath": "mitre/attack-enterprise.json",
+      "releaseDate": "2023-10-31",
+      "matrix": "Enterprise ATT&CK",
+      "techniquesCount": 9,
+      "tacticsCount": 14,
+      "status": "ARCHIVED"
+    }
+  ]
+}

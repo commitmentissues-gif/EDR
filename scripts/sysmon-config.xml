@@ -1,0 +1,63 @@
+<Sysmon schemaversion="4.90">
+  <!-- LocalEDR Sysmon Configuration Schema -->
+  <!-- Captures high-fidelity Windows endpoint telemetry for LocalEDR evaluation -->
+  <HashAlgorithms>md5,sha256,imphash</HashAlgorithms>
+  <CheckRevocation/>
+  <EventFiltering>
+    <!-- Event ID 1: Process Creation (Sysmon ProcessCreate) -->
+    <RuleGroup name="ProcessCreationRules" groupRelation="or">
+      <ProcessCreate onmatch="include">
+        <!-- Capture all command line processes by default -->
+        <Image condition="is not">?</Image>
+      </ProcessCreate>
+      <ProcessCreate onmatch="exclude">
+        <!-- Exclude known high-volume noisy Windows binaries to minimize RAM and CPU -->
+        <Image condition="is">C:\Windows\System32\audiodg.exe</Image>
+        <Image condition="is">C:\Windows\System32\taskhostw.exe</Image>
+      </ProcessCreate>
+    </RuleGroup>
+
+    <!-- Event ID 3: Network Connection (Sysmon NetworkConnect) -->
+    <RuleGroup name="NetworkConnectionRules" groupRelation="or">
+      <NetworkConnect onmatch="include">
+        <!-- Target non-standard or script-initiated outbound network connections -->
+        <Image condition="image">powershell.exe</Image>
+        <Image condition="image">cmd.exe</Image>
+        <Image condition="image">certutil.exe</Image>
+        <Image condition="image">rundll32.exe</Image>
+        <Image condition="image">mshta.exe</Image>
+        <Image condition="image">regsvr32.exe</Image>
+        <Image condition="image">wscript.exe</Image>
+        <Image condition="image">cscript.exe</Image>
+        <DestinationPort condition="is">443</DestinationPort>
+        <DestinationPort condition="is">80</DestinationPort>
+        <DestinationPort condition="is">8080</DestinationPort>
+        <DestinationPort condition="is">4444</DestinationPort>
+      </NetworkConnect>
+    </RuleGroup>
+
+    <!-- Event ID 11: File Create (Sysmon FileCreate) -->
+    <RuleGroup name="FileCreateRules" groupRelation="or">
+      <FileCreate onmatch="include">
+        <TargetFilename condition="contains">AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup</TargetFilename>
+        <TargetFilename condition="contains">C:\Windows\System32\Drivers</TargetFilename>
+        <TargetFilename condition="end with">.exe</TargetFilename>
+        <TargetFilename condition="end with">.dll</TargetFilename>
+        <TargetFilename condition="end with">.bat</TargetFilename>
+        <TargetFilename condition="end with">.ps1</TargetFilename>
+        <TargetFilename condition="end with">.vbs</TargetFilename>
+      </FileCreate>
+    </RuleGroup>
+
+    <!-- Event ID 12/13: Registry Event (Sysmon RegistryEvent) -->
+    <RuleGroup name="RegistryRules" groupRelation="or">
+      <RegistryEvent onmatch="include">
+        <!-- Monitor Persistence Autostart Keys -->
+        <TargetObject condition="contains">CurrentVersion\Run</TargetObject>
+        <TargetObject condition="contains">CurrentVersion\RunOnce</TargetObject>
+        <TargetObject condition="contains">CurrentVersion\Policies\Explorer\Run</TargetObject>
+        <TargetObject condition="contains">Services\WinDefend</TargetObject>
+      </RegistryEvent>
+    </RuleGroup>
+  </EventFiltering>
+</Sysmon>

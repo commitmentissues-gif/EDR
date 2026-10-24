@@ -1,0 +1,34 @@
+[
+  {
+    "type": "sha256",
+    "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "description": "Emotet Dropper Generic Loader Sample",
+    "threat_actor": "TA542",
+    "severity": "CRITICAL",
+    "confidence": 95
+  },
+  {
+    "type": "sha256",
+    "value": "44d88612fea8a8f36de82e1278abb02f",
+    "description": "Cobalt Strike Beacon Stager Test Hash",
+    "threat_actor": "Generic Red Team / APT",
+    "severity": "CRITICAL",
+    "confidence": 90
+  },
+  {
+    "type": "ip",
+    "value": "198.51.100.42",
+    "description": "Known C2 Beacon IP (Simulated Threat Intel Feed)",
+    "threat_actor": "FIN7 / Carbanak Simulation",
+    "severity": "HIGH",
+    "confidence": 85
+  },
+  {
+    "type": "ip",
+    "value": "203.0.113.88",
+    "description": "Command & Control Relay Exfiltration Server",
+    "threat_actor": "Lazarus Test Feed",
+    "severity": "HIGH",
+    "confidence": 90
+  }
+]

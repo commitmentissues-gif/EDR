@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LocalEDRConfiguration",
+  "type": "object",
+  "properties": {
+    "server": {
+      "type": "object",
+      "properties": {
+        "host": { "type": "string", "default": "127.0.0.1" },
+        "port": { "type": "integer", "default": 3000 },
+        "corsAllowedOrigins": { "type": "array", "items": { "type": "string" } },
+        "adminToken": { "type": "string" }
+      },
+      "required": ["host", "port"]
+    },
+    "agent": {
+      "type": "object",
+      "properties": {
+        "serviceName": { "type": "string", "default": "LocalEDR_Agent" },
+        "displayName": { "type": "string", "default": "LocalEDR Endpoint Defense Agent" },
+        "heartbeatIntervalSeconds": { "type": "integer", "default": 10 },
+        "maxMemoryMb": { "type": "integer", "default": 150 },
+        "maxCpuPercent": { "type": "number", "default": 2.0 }
+      },
+      "required": ["serviceName", "heartbeatIntervalSeconds"]
+    },
+    "database": {
+      "type": "object",
+      "properties": {
+        "filePath": { "type": "string", "default": "data/localedr.db" },
+        "walMode": { "type": "boolean", "default": true },
+        "autoSaveIntervalMs": { "type": "integer", "default": 2000 },
+        "maxEventRetentionDays": { "type": "integer", "default": 30 }
+      },
+      "required": ["filePath"]
+    },
+    "queue": {
+      "type": "object",
+      "properties": {
+        "maxCapacity": { "type": "integer", "default": 10000 },
+        "batchFlushSize": { "type": "integer", "default": 100 },
+        "flushIntervalMs": { "type": "integer", "default": 500 }
+      }
+    },
+    "logging": {
+      "type": "object",
+      "properties": {
+        "level": { "type": "string", "enum": ["DEBUG", "INFO", "WARN", "ERROR", "AUDIT"], "default": "INFO" },
+        "logToFile": { "type": "boolean", "default": true },
+        "logFilePath": { "type": "string", "default": "data/logs/localedr.log" },
+        "format": { "type": "string", "enum": ["json", "pretty"], "default": "pretty" }
+      },
+      "required": ["level"]
+    }
+  },
+  "required": ["server", "agent", "database", "logging"]
+}

@@ -1,0 +1,17 @@
+{
+  "status": "HEALTHY",
+  "serviceName": "LocalEDR_Agent",
+  "processId": 705,
+  "uptimeSeconds": 0,
+  "timestamp": "2026-09-25T16:55:55.898Z",
+  "memory": {
+    "workingSetMb": 91,
+    "privateMemoryMb": 9
+  },
+  "database": {
+    "accessible": true,
+    "path": "data/localedr.db",
+    "sizeBytes": 94208
+  },
+  "telemetryStatus": "TELEMETRY_DISABLED_FOUNDATION_ONLY"
+}
